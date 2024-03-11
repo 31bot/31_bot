@@ -1,109 +1,64 @@
-#!ruby
 
-
-# ---- Goole Geminiくんの答え ----
-
-Ruby
-require 'net/http'
 require 'uri'
+require 'net/http'
+require 'oauth'
 require 'json'
-
-# Twitter認証情報
-CONSUMER_KEY = 'YOUR_CONSUMER_KEY'
-CONSUMER_SECRET = 'YOUR_CONSUMER_SECRET'
-ACCESS_TOKEN = 'YOUR_ACCESS_TOKEN'
-ACCESS_TOKEN_SECRET = 'YOUR_ACCESS_TOKEN_SECRET'
-
-# 投稿するデータ
-text = 'これはテスト投稿です。'
-
-# リクエストパラメータ
-params = {
-  'status' => text,
-}
-
-# OAuth認証ヘッダー生成
-oauth_header = generate_oauth_header(CONSUMER_KEY, CONSUMER_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET, params)
-
-# HTTPリクエスト送信
-uri = URI.parse('https://api.twitter.com/1.1/statuses/update.json')
-http = Net::HTTP.new(uri.host, uri.port)
-http.use_ssl = true
-request = Net::HTTP::Post.new(uri.request_uri)
-request['Authorization'] = oauth_header
-request.set_form_data(params)
-response = http.request(request)
-
-# レスポンス処理
-if response.code == '200'
-  puts '投稿成功しました！'
-else
-  puts "投稿失敗しました: #{response.code} #{response.message}"
-end
-
-# OAuth認証ヘッダー生成
-def generate_oauth_header(consumer_key, consumer_secret, access_token, access_token_secret, params)
-  oauth = OAuth::HMAC::Consumer.new(consumer_key, consumer_secret, {:signature_method => 'HMAC-SHA1'})
-  token = OAuth::AccessToken.new(oauth, access_token, access_token_secret)
-  nonce = OAuth::Nonce.new
-  timestamp = OAuth::Timestamp.new
-  signature = token.sign(:post, 'https://api.twitter.com/1.1/statuses/update.json', params, {:nonce => nonce, :timestamp => timestamp})
-  header = 'OAuth realm="Twitter API", '
-  header << 'oauth_consumer_key="%s", ' % [consumer_key]
-  header << 'oauth_token="%s", ' % [access_token]
-  header << 'oauth_nonce="%s", ' % [nonce]
-  header << 'oauth_timestamp="%s", ' % [timestamp]
-  header << 'oauth_signature_method="HMAC-SHA1", '
-  header << 'oauth_signature="%s"' % [signature]
-  header
-end
-
-# ---- Google Geminiくんの答え終わり ----
-
-
-# ---- Claude3 Opusくんの答え ----
-
-
-require 'net/http'
-require 'uri'
 require 'yaml'
-require 'base64'
-require 'openssl'
+require 'typhoeus'
+require 'oauth/request_proxy/typhoeus_request'
+require 'dotenv/load'
+
+# YAMLから認証内容を読み込む
+config_data = YAML.load_file('config.yaml')
 
 # YAMLからツイート内容を読み込む
-tweet_data = YAML.load_file('tweet_data.yml')
-tweet_text = tweet_data['text']
+# tweet_data = YAML.load_file('tweet_data.yml')
+# tweet_text = tweet_data['text']
+tweet_text = "テスト2024-03-011 23:11"
 
-# 認証情報を設定
-consumer_key = 'YOUR_API_KEY'
-consumer_secret = 'YOUR_API_SECRET'
-token = 'YOUR_ACCESS_TOKEN'
-token_secret = 'YOUR_ACCESS_TOKEN_SECRET'
+# Twitter認証情報
+consumer_key = config_data['twitter']['CONSUMER_KEY']
+consumer_secret = config_data['twitter']['CONSUMER_SECRET']
+access_token = config_data['twitter']['ACCESS_TOKEN']
+access_token_secret  = config_data['twitter']['ACCESS_TOKEN_SECRET']
 
-# OAuthの認証ヘッダーを作成
-nonce = OpenSSL::Random.random_bytes(32).unpack('H*')[0]
-ts = Time.now.to_i.to_s
-parameter_string = "oauth_consumer_key=#{consumer_key}&oauth_nonce=#{nonce}&oauth_signature_method=HMAC-SHA1&oauth_timestamp=#{ts}&oauth_token=#{token}&oauth_version=1.0"
-base_string = "POST&https%3A%2F%2Fapi.twitter.com%2F1.1%2Fstatuses%2Fupdate.json&#{URI.encode_www_form_component(parameter_string)}"
-signing_key = URI.encode_www_form_component(consumer_secret) + "&" + URI.encode_www_form_component(token_secret)
-digest = OpenSSL::HMAC.digest('sha1', signing_key, base_string)
-oauth_signature = Base64.encode64(digest).gsub(/\n/, '')
-auth_header = "OAuth oauth_consumer_key=\"#{consumer_key}\", oauth_nonce=\"#{nonce}\", oauth_signature=\"#{oauth_signature}\", oauth_signature_method=\"HMAC-SHA1\", oauth_timestamp=\"#{ts}\", oauth_token=\"#{token}\", oauth_version=\"1.0\""
 
-# ツイートを投稿するリクエストを送信
-uri = URI.parse('https://api.twitter.com/1.1/statuses/update.json')
-request = Net::HTTP::Post.new(uri)
-request['Authorization'] = auth_header
-request.set_form_data('status' => tweet_text)
+create_tweet_url = "https://api.twitter.com/2/tweets"
 
-http = Net::HTTP.new(uri.host, uri.port)
-http.use_ssl = true
-response = http.request(request)
+# Be sure to add replace the text of the with the text you wish to Tweet.
+# You can also add parameters to post polls, quote Tweets, Tweet with reply settings, and Tweet to Super Followers in addition to other features.
+@json_payload = {"text": tweet_text}
 
-# レスポンスを処理
-if response.code == '200'
-  puts 'ツイートが投稿されました'
-else
-  puts "エラー: #{response.body}"
+def create_tweet(url, oauth_params)
+	options = {
+	    :method => :post,
+	    headers: {
+	     	"User-Agent": "v2CreateTweetRuby",
+        "content-type": "application/json"
+	    },
+	    body: JSON.dump(@json_payload)
+	}
+	request = Typhoeus::Request.new(url, options)
+	oauth_helper = OAuth::Client::Helper.new(request, oauth_params.merge(:request_uri => url))
+	request.options[:headers].merge!({"Authorization" => oauth_helper.header}) # Signs the request
+	response = request.run
+
+	return response
 end
-# ---- Claude3 Opusくんの答え終わり ----
+
+# OAuth Consumerオブジェクトを作成
+consumer = OAuth::Consumer.new(consumer_key, consumer_secret,
+	:site => 'https://api.twitter.com',
+	:debug_output => false)
+
+# OAuth Access Tokenオブジェクトを作成
+access_token = OAuth::AccessToken.new(consumer, access_token, access_token_secret)
+
+# OAuthパラメータをまとめたハッシュを作成
+oauth_params = {
+:consumer => consumer,
+:token => access_token,
+}
+
+response = create_tweet(create_tweet_url, oauth_params)
+puts response.code, JSON.pretty_generate(JSON.parse(response.body))
