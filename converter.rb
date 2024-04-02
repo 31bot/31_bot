@@ -1,63 +1,69 @@
-title = '巻一　春上　テスト'
-waka1 = {"author": "在原元方", "詞書": "ふるとしに", "詞書(現代訳)": "旧年中に"}
-
-object = [title, waka1]
-
-p object
-
-
-# title: 巻一 春上
-#   - number: 1
-#     author: 在原元方〈ありはらのもとかた〉
-#     詞書: 古るとしに春立ちける日よめる
-#     詞書(現代訳): 旧年中に立春を迎えた日に詠んだ歌
-#     歌: 年の内に春は来にけり一年〈ひととせ〉を去年〈こぞ〉とやいはむ今年とやいはむ
-#     返し先: 
-#     続き先: 
-#     tags: [春, ふるとし, 立つ, 日, 年, 内, 来る, 一年, 去年, 今年]
-#   - number: 2
-#     ……
+p ARGV
 
 o = []
-i = 0
 
-file = File.open("古今和歌集巻一春上.yaml")
+# file = File.open(ARGV[0])
+file = File.open("古今和歌集巻四秋上.yaml")
 
-file.each do |line|
-  p i
-  
+
+file.each do |line|  
   case line
   when /^\s*title:\s([^:]+)$/
-    o << {title: $+}
-    p $+
+    o << {"title": $+}
   when /^\s*-\snumber: (\d+)$/
     o << {"number": $1}
-    p $1
   when /author: (\S+)$/
     o.last["author"]=$1
-    p $1
   when /詞書: (\S+)$/
-    o.last["詞書"]=$1
-    p $1
+    o.last["kotobagaki"]=$1
   when /詞書\(現代訳\): (\S+)$/
-    o.last["詞書(現代訳)"]=$1
-    p $1
+    o.last["gkotobagaki"]=$1
   when /歌: (\S+)$/
-    o.last["歌"]=$1
-    p $1
+    o.last["uta"]=$1
   when /返し先: (\S+)$/
-    o.last["返し先"]=$1
-    p $1
+    o.last["kaesi"]=$1
   when /続き先: (\S+)$/
-    o.last["続き先"]=$1
-    p $1
+    o.last["tsuduki"]=$1
   when /tags: (\S+)$/
     o.last["tags"]=$1
-    p $1
   end
-  i += 1
 end
 file.close
 
-p o
+wo = []
+wo << '<ul class="wakas">' << "\n"
+o.each do |ob|
+  if ob.key?('title') then
+    p "タイトルは……" << ob["title"] << "\n"
+    next
+  end
+#  elsif ob.key?("number") and ob.key?("author") and ob.key?("gkotobagaki") and ob.key?("uta") then
+    wo << '  <li>' << "\n"
+    wo << '    <ul class="waka">' << "\n"
+    wo << '      <li class="w_num">' << ob[:number] << '</li>' << "\n"
+    wo << '      <li class="w_author">' << ob["author"] << '</li>' << "\n"
+    wo << '      <li class="w_kotobagaki">' << ob["gkotobagaki"] << '</li>' << "\n"
+    wo << '      <li class="w_waka">' << ob["uta"] << '</li>' << "\n"
+    wo << '    </ul>' << "\n"
+    wo << '  </li>' << "\n"
+#  else
+#    p "エラー。妙なデータが見つかりました"
+#  end
+end
 
+wo << '</ul>' << "\n"
+
+
+# File.open(ARGV[1], "a") << wo
+a = File.open("vol4.html", "a") 
+
+wo.each do |line|
+  a << line
+#  p line
+end
+
+a.close
+
+# p o
+
+p ARGV[1]
