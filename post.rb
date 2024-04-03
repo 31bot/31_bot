@@ -1,4 +1,3 @@
-
 require 'uri'
 require 'net/http'
 require 'oauth'
@@ -6,7 +5,7 @@ require 'json'
 require 'yaml'
 require 'typhoeus'
 require 'oauth/request_proxy/typhoeus_request'
-require 'dotenv/load'
+require 'bskyrb'
 
 # YAMLから認証内容を読み込む
 config_data = YAML.load_file('config.yaml')
@@ -14,16 +13,21 @@ config_data = YAML.load_file('config.yaml')
 # YAMLからツイート内容を読み込む
 # tweet_data = YAML.load_file('tweet_data.yml')
 # tweet_text = tweet_data['text']
-tweet_text = "テスト2024-03-011 23:11"
+tweet_text = "テスト2024-04-03 20:45"
 
 # Twitter認証情報
-consumer_key = config_data['twitter']['CONSUMER_KEY']
-consumer_secret = config_data['twitter']['CONSUMER_SECRET']
-access_token = config_data['twitter']['ACCESS_TOKEN']
-access_token_secret  = config_data['twitter']['ACCESS_TOKEN_SECRET']
-
-
+consumer_key = config_data['CONSUMER_KEY']
+consumer_secret = config_data['CONSUMER_SECRET']
+access_token = config_data['ACCESS_TOKEN']
+access_token_secret  = config_data['ACCESS_TOKEN_SECRET']
 create_tweet_url = "https://api.twitter.com/2/tweets"
+
+# Bsky認証情報
+username = config_data['username']
+password = config_data['password']
+pds_url = config_data['pds_url']
+
+
 
 # Be sure to add replace the text of the with the text you wish to Tweet.
 # You can also add parameters to post polls, quote Tweets, Tweet with reply settings, and Tweet to Super Followers in addition to other features.
@@ -62,3 +66,10 @@ oauth_params = {
 
 response = create_tweet(create_tweet_url, oauth_params)
 puts response.code, JSON.pretty_generate(JSON.parse(response.body))
+
+credentials = Bskyrb::Credentials.new(username, password)
+session = Bskyrb::Session.new(credentials, pds_url)
+bsky = Bskyrb::RecordManager.new(session)
+
+bsky.create_post(tweet_text)
+
