@@ -11,7 +11,7 @@ require 'aws-sdk-s3'
 
 def lambda_handler(event:, context:)
   
-  puts "Starting test"
+  puts "Starting 31bot Script"
   
   #### S3からデータを得る
   # API client for S3
