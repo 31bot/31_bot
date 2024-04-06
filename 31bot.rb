@@ -11,57 +11,69 @@ require 'aws-sdk-s3'
 
 def lambda_handler(event:, context:)
   
-  puts "Starting test"
+  puts "Starting 31bot Script"
   
-  #### S3からデータを得る
-  # API client for S3
+  #### AWS S3からデータを得る
+  # S3に接続
   s3_client = Aws::S3::Client.new(region: "ap-northeast-1")
   
-  
-  ##### 引数を格納
-  # S3のバケット名
+  # S3のバケット名を指定
   bucket_name = '31bot'
   
   file_list = []
   
   puts bucket_name
   
+  # 配列にS3 バケットの中身(ファイルのリスト)を格納
   s3_client.list_objects(:bucket => bucket_name).contents.each do |object|
     file_list << object.key
   end
   
   puts file_list.to_s
   
+  # バケットの中身(ファイルのリスト)からランダムにファイルを指定、中身を取り出す
   file_body = s3_client.get_object(:bucket => bucket_name, :key => file_list[rand(1..file_list.size)-1]).body
   
   puts file_body
   
+  ### 投稿文生成
+  # バケットの中身がYAMLファイルなので、Rubyのオブジェクトに変換する
   yamlbody = YAML.load(file_body)
   
+  # バケットの中身は、和歌のデータの配列なので、ランダムに指定し取り出す
   waka = yamlbody[rand(yamlbody.size - 1)]
   
   puts waka
   
-  
+  # 取り出した和歌のデータから投稿するテキストを生成する。最後に140文字以内にカットしている
   post_text = "#{waka["source"]}: #{waka["number"]}\n#{waka["詞書(現代訳)"]}\n#{waka["歌"]}\n#{waka["author"]}".force_encoding('UTF-8').slice(0, 140)
 
+# AWS S3を使わずにプログラムが動くか確認するためのダミー投稿文生成
 #  t_time = Time.now.to_s
 #  post_text = "test post: #{t_time}"
   
+  
+  ### 認証情報生成
+  # ここでは環境変数から取り出している
+  
+  ###
+  # Twitter認証情報
   tw_consumer_key = ENV["tw_consumer_key"]
   tw_consumer_secret = ENV["tw_consumer_secret"]
   tw_access_token = ENV["tw_access_token"]
   tw_access_token_secret  = ENV["tw_access_token_secret"]
   tw_create_tweet_url = "https://api.twitter.com/2/tweets"
   
-  
+  # Bluesky認証情報
   bs_username = ENV["bs_username"]
   bs_password = ENV["bs_password"]
   bs_pds_url = "https://bsky.social"
   
+  ### 投稿前準備完了
   puts "投稿準備"
   puts "投稿用テキスト: #{post_text}"
   
+  ### Twitter・Blueskyへ投稿
   # Twitterへの投稿
   timestamp = Time.now.to_i
   nonce = SecureRandom.hex
@@ -100,11 +112,12 @@ def lambda_handler(event:, context:)
     puts e.backtrace
   end
   
-  
+  # 投稿した結果を標準出力に出そうとしたが、TwitterのレスポンスのUTF-8変換がうまくいかないため、コメントアウト
 #  puts twitter_response
 #  puts twitter_response.body
 
   
+  ###
   # Blueskyへの投稿
   uri = URI.parse("#{bs_pds_url}/xrpc/com.atproto.server.createSession")
   http = Net::HTTP.new(uri.host, uri.port)
@@ -134,9 +147,13 @@ def lambda_handler(event:, context:)
     puts e.message
     puts e.backtrace
   end
-
-
+  
+  
 #  puts bluesky_response
 #  puts bluesky_response.body
+  
+  # 投稿終わり
+  puts "投稿スクリプト終わり。Well done!"
+  
 end
 
