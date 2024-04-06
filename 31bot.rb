@@ -117,12 +117,12 @@ def lambda_handler(event:, context:)
   uri = URI.parse("#{bs_pds_url}/xrpc/com.atproto.repo.createRecord")
   request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json', 'Authorization' => "Bearer #{session['accessJwt']}")
   request.body = {
-  collection: 'app.bsky.feed.post',
-  repo: session['did'],
-  record: {
-    text: post_text,
-    createdAt: Time.now.utc.iso8601
-  }
+    collection: 'app.bsky.feed.post',
+    repo: session['did'],
+    record: {
+      text: post_text,
+      createdAt: Time.now.utc.iso8601
+    }
   }.to_json
 
   begin
