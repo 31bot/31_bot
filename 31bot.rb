@@ -14,7 +14,7 @@ def lambda_handler(event:, context:)
   puts "Starting 31bot Script"
   
   #### AWS S3からデータを得る
-  # S3に接続
+  puts "S3に接続します"
   s3_client = Aws::S3::Client.new(region: "ap-northeast-1")
   
   # S3のバケット名を指定
@@ -24,6 +24,7 @@ def lambda_handler(event:, context:)
   
   puts bucket_name
   
+  puts "バケットの中身を取り出します"
   # 配列にS3 バケットの中身(ファイルのリスト)を格納
   s3_client.list_objects(:bucket => bucket_name).contents.each do |object|
     file_list << object.key
