@@ -1,3 +1,7 @@
 config.yaml
 .DS_Store
 vol*
+ruby
+.ruby-version
+.bundle
+Gemfile.lock

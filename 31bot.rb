@@ -7,7 +7,14 @@ require 'yaml'
 require 'time'
 require 'aws-sdk-s3'
 
-# 31bot script ver 1.0
+# 31bot script ver 1.02
+
+# 1.02
+# twitterでは読みを削除
+
+# 1.01
+# twittrでは140文字以内、bskyではそれ以上の文字数が可能に設定
+
 
 def lambda_handler(event:, context:)
   
@@ -47,7 +54,7 @@ def lambda_handler(event:, context:)
   puts waka
   
   # 取り出した和歌のデータから投稿するテキストを生成する。最後に140文字以内にカットしている
-  post_text = "#{waka["source"]}: #{waka["number"]}\n#{waka["詞書(現代訳)"]}\n#{waka["歌"]}\n#{waka["author"]}".force_encoding('UTF-8').slice(0, 140)
+  post_text = "#{waka["source"]}#{waka["number"]}\n#{waka["詞書(現代訳)"]}\n#{waka["歌"].delete(" ")}\n#{waka["author"]}"
 
 # AWS S3を使わずにプログラムが動くか確認するためのダミー投稿文生成
 #  t_time = Time.now.to_s
@@ -94,7 +101,7 @@ def lambda_handler(event:, context:)
     'Authorization' => "OAuth oauth_consumer_key=\"#{tw_consumer_key}\", oauth_nonce=\"#{nonce}\", oauth_signature=\"#{URI.encode_www_form_component(signature)}\", oauth_signature_method=\"HMAC-SHA1\", oauth_timestamp=\"#{timestamp}\", oauth_token=\"#{tw_access_token}\", oauth_version=\"1.0\"",
   'Content-Type' => 'application/json'
   }
-  body = { text: post_text }.to_json
+  body = {text: post_text.gsub(/〈[^〉]*〉/, "").slice(0, 140)}.to_json
 
   uri = URI.parse(tw_create_tweet_url)
   http = Net::HTTP.new(uri.host, uri.port)
