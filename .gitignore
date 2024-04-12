@@ -5,3 +5,5 @@ ruby
 .ruby-version
 .bundle
 Gemfile.lock
+count.rb
+codes.rb
