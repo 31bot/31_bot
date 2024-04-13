@@ -2,8 +2,8 @@ p ARGV
 
 o = []
 
-# file = File.open(ARGV[0])
-file = File.open("古今和歌集巻四秋上.yaml")
+file = File.open(ARGV[0])
+# file = File.open("古今和歌集巻二春下.yaml")
 
 
 file.each do |line|  
@@ -18,7 +18,7 @@ file.each do |line|
     o.last["kotobagaki"]=$1
   when /詞書\(現代訳\): (\S+)$/
     o.last["gkotobagaki"]=$1
-  when /歌: (\S+)$/
+  when /歌: (.+)$/
     o.last["uta"]=$1
   when /返し先: (\S+)$/
     o.last["kaesi"]=$1
@@ -42,8 +42,8 @@ o.each do |ob|
     wo << '    <ul class="waka">' << "\n"
     wo << '      <li class="w_num">' << ob[:number] << '</li>' << "\n"
     wo << '      <li class="w_author">' << ob["author"] << '</li>' << "\n"
-    wo << '      <li class="w_kotobagaki">' << ob["gkotobagaki"] << '</li>' << "\n"
     wo << '      <li class="w_waka">' << ob["uta"] << '</li>' << "\n"
+    wo << '      <li class="w_kotobagaki">' << ob["gkotobagaki"] << '</li>' << "\n"
     wo << '    </ul>' << "\n"
     wo << '  </li>' << "\n"
 #  else
@@ -54,8 +54,8 @@ end
 wo << '</ul>' << "\n"
 
 
-# File.open(ARGV[1], "a") << wo
-a = File.open("vol4.html", "a") 
+a = File.open(ARGV[1], "a")
+# a = File.open("vol2.html", "a") 
 
 wo.each do |line|
   a << line
@@ -66,4 +66,4 @@ a.close
 
 # p o
 
-p ARGV[1]
+# p ARGV[1]
