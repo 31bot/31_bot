@@ -18,7 +18,7 @@ require 'aws-sdk-s3'
 
 def lambda_handler(event:, context:)
   
-  puts "Starting 31bot Script"
+  puts "31bot Script を開始します……"
   
   #### AWS S3からデータを得る
   puts "S3に接続します"
