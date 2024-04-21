@@ -120,9 +120,8 @@ def lambda_handler(event:, context:)
     puts e.backtrace
   end
   
-  # 投稿した結果を標準出力に出そうとしたが、TwitterのレスポンスのUTF-8変換がうまくいかないため、コメントアウト
-#  puts twitter_response
-#  puts twitter_response.body
+  puts twitter_response.to_s
+  puts twitter_response.body.force_encoding("UTF-8")
 
   
   ###
@@ -157,8 +156,8 @@ def lambda_handler(event:, context:)
   end
   
   
-#  puts bluesky_response
-#  puts bluesky_response.body
+  puts bluesky_response.to_s
+  puts bluesky_response.body.to_s
   
   # 投稿終わり
   puts "投稿スクリプト終わり。Well done!"
