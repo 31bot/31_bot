@@ -7,7 +7,10 @@ require 'yaml'
 require 'time'
 require 'aws-sdk-s3'
 
-# 31bot script ver 1.02
+# 31bot script ver 1.5
+
+# 1.5
+# Misskey.ioに対応
 
 # 1.02
 # twitterでは読みを削除
@@ -76,6 +79,9 @@ def lambda_handler(event:, context:)
   bs_username = ENV["bs_username"]
   bs_password = ENV["bs_password"]
   bs_pds_url = "https://bsky.social"
+  
+  # Misskey認証情報
+  mk_access_token = ENV["mk_access_token"]
   
   ### 投稿前準備完了
   puts "投稿準備"
@@ -159,8 +165,40 @@ def lambda_handler(event:, context:)
   puts bluesky_response.to_s
   puts bluesky_response.body.to_s
   
+  
+  ###
+  # misskeyへの投稿
+  uri = URI.parse("https://misskey.io/api/notes/create")
+  request = Net::HTTP::Post.new(uri)
+  request.content_type = "application/json"
+  request["Authorization"] = "Bearer #{mk_access_token}"
+  request.body = {"text": post_text}.to_json
+
+  req_options = {use_ssl: uri.scheme == "https"}
+  
+  
+  begin
+    response = Net::HTTP.start(uri.hostname, uri.port, req_options) do |http|
+      http.request(request)
+    end
+    
+    if response.code == '200' then
+      # 投稿が成功しました
+      puts "Misskeyへの投稿が成功しました。"
+    else
+      puts "Misskeyへの投稿が失敗しました。"
+    end
+  rescue => e
+    puts "bluesky投稿エラー"
+    puts e.class
+    puts e.message
+    puts e.backtrace
+  end
+  
+  puts response.to_s
+  puts response.body.force_encoding("UTF-8")
+  
   # 投稿終わり
   puts "投稿スクリプト終わり。Well done!"
-  
 end
 
