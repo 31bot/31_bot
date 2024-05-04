@@ -1,9 +1,11 @@
-config.yaml
 .DS_Store
+.envrc
+.env
+Gemfile.lock
 ruby
 .ruby-version
 .bundle
-Gemfile.lock
+config.yaml
 count.rb
 codes.rb
 _kokinwakashu/
