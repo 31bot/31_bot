@@ -23,11 +23,11 @@ wo << "<ul class='wakas'>\n"
 o.each do |ob|
     wo << "  <li>\n"
     wo << "    <ul class='waka'>\n"
-    wo << "      <li class='w_num'><p><a href='#{vol}/#{ob["number"]}'>#{ob["number"]}</a></p></li>\n"
-    wo << "      <li class='w_author'><p><a href='#{vol}/#{ob["number"]}'>#{ob["author"]}</a></p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
-    wo << "      <li class='w_waka'><p><a href='#{vol}/#{ob["number"]}'>#{ob["歌"]}</a></p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
+    wo << "      <li class='w_num'><p><a href='#{ob["number"]}'>#{ob["number"]}</a></p></li>\n"
+    wo << "      <li class='w_author'><p><a href='#{ob["number"]}'>#{ob["author"]}</a></p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
+    wo << "      <li class='w_waka'><p><a href='#{ob["number"]}'>#{ob["歌"]}</a></p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
 #    wo << "      <li class='w_kai'><p>#{ob["歌意"]}</p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
-    wo << "      <li class='w_kotobagaki'><p><a href='#{vol}/#{ob["number"]}'>#{ob["詞書(現代訳)"]}</p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
+    wo << "      <li class='w_kotobagaki'><p><a href='#{ob["number"]}'>#{ob["詞書(現代訳)"]}</p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
 #    wo << "      <li class='w_kaisetu'><p>#{ob["解説"]}</p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
     wo << "    </ul>\n"
     wo << "  </li>\n"
