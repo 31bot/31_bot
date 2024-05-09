@@ -8,4 +8,5 @@ ruby
 config.yaml
 count.rb
 codes.rb
-_kokinwakashu/
+vol*
+preface*
