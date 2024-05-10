@@ -149,7 +149,7 @@ wo << "  <li>\n"
 wo << "    <ul class='waka'>\n"
 wo << "      <li class='w_num'><p>#{waka["number"]}</p></li>\n"
 wo << "      <li class='w_author'><p>#{waka["author"]}</p></li>\n".gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")
-wo << "      <li class='w_waka'>\n"
+wo << "      <li class='w_each_waka'>\n"
 wo << "        <p class='w1'>#{ku[0].gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")}</p>\n"
 wo << "        <p class='w2'>#{ku[1].gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")}</p>\n"
 wo << "        <p class='w3'>#{ku[2].gsub(/〈/, "<sup>").gsub(/〉/, "</sup>")}</p>\n"
