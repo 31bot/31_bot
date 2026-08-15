@@ -18,6 +18,15 @@ require 'aws-sdk-s3'
 # 1.01
 # twittrでは140文字以内、bskyではそれ以上の文字数が可能に設定
 
+def redact_for_log(value, secrets)
+  redacted = value.to_s.dup.force_encoding("UTF-8")
+  secrets.compact.reject { |secret| secret.to_s.empty? }.each do |secret|
+    redacted.gsub!(secret.to_s, "[REDACTED]")
+  end
+  redacted.gsub!(/("(?:accessJwt|refreshJwt|access_token|token|password|authorization)"\s*:\s*")[^"]*(")/i, '\1[REDACTED]\2')
+  redacted.gsub!(/Bearer\s+[^\s",}]+/i, "Bearer [REDACTED]")
+  redacted
+end
 
 def lambda_handler(event:, context:)
   
@@ -37,27 +46,46 @@ def lambda_handler(event:, context:)
   puts "バケットの中身を取り出します"
   # 配列にS3 バケットの中身(ファイルのリスト)を格納
   s3_client.list_objects(:bucket => bucket_name).contents.each do |object|
-    file_list << object.key
+    file_list << object.key if object.key.match?(/\.ya?ml\z/i)
   end
   
   puts file_list.to_s
   
+  if file_list.empty?
+    puts "投稿候補がありません: S3オブジェクト=(なし), 理由=.ymlまたは.yamlのオブジェクトがありません"
+    return false
+  end
+
   # バケットの中身(ファイルのリスト)からランダムにファイルを指定、中身を取り出す
-  file_body = s3_client.get_object(:bucket => bucket_name, :key => file_list[rand(1..file_list.size)-1]).body
+  selected_key = file_list.sample
+  file_body = s3_client.get_object(:bucket => bucket_name, :key => selected_key).body
   
   puts file_body
   
   ### 投稿文生成
   # バケットの中身がYAMLファイルなので、Rubyのオブジェクトに変換する
-  yamlbody = YAML.load(file_body)
-  
-  # バケットの中身は、和歌のデータの配列なので、ランダムに指定し取り出す
-  waka = yamlbody[rand(yamlbody.size)]  
-  
-  puts waka
-  
-  # 取り出した和歌のデータから投稿するテキストを生成する。最後に140文字以内にカットしている
-  post_text = "#{waka["source"]}#{waka["number"]}\n#{waka["詞書(現代訳)"]}\n#{waka["歌"].delete(" ")}\n#{waka["author"]}"
+  begin
+    yamlbody = YAML.load(file_body)
+  rescue Psych::SyntaxError => e
+    puts "YAML構文エラー: S3オブジェクト=#{selected_key}, エラー=#{e.message}"
+    return false
+  end
+
+  required_fields = ["source", "number", "詞書(現代訳)", "歌", "author"]
+  candidates = (yamlbody.is_a?(Array) ? yamlbody : []).each_with_object([]) do |record, matches|
+    next unless record.is_a?(Hash)
+    next unless required_fields.all? { |field| !record[field].nil? && !record[field].to_s.strip.empty? }
+
+    text = "#{record["source"]}#{record["number"]}\n#{record["詞書(現代訳)"]}\n#{record["歌"].to_s.delete(" ")}\n#{record["author"]}"
+    matches << text if text.scan(/\X/).length <= 300 && text.bytesize <= 3_000
+  end
+
+  if candidates.empty?
+    puts "投稿候補がありません: S3オブジェクト=#{selected_key}, 理由=必須項目の欠落、Bluesky完成本文が300書記素超過、または3,000バイト超過"
+    return false
+  end
+
+  post_text = candidates.sample
 
 # AWS S3を使わずにプログラムが動くか確認するためのダミー投稿文生成
 #  t_time = Time.now.to_s
@@ -78,39 +106,60 @@ def lambda_handler(event:, context:)
   
   ###
   # Blueskyへの投稿
-  uri = URI.parse("#{bs_pds_url}/xrpc/com.atproto.server.createSession")
-  http = Net::HTTP.new(uri.host, uri.port)
-  http.use_ssl = true
-  request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json')
-  request.body = { identifier: bs_username, password: bs_password }.to_json
-  response = http.request(request)
-  session = JSON.parse(response.body)
-
-  uri = URI.parse("#{bs_pds_url}/xrpc/com.atproto.repo.createRecord")
-  request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json', 'Authorization' => "Bearer #{session['accessJwt']}")
-  request.body = {
-    collection: 'app.bsky.feed.post',
-    repo: session['did'],
-    record: {
-      text: post_text,
-      createdAt: Time.now.utc.iso8601
-    }
-  }.to_json
-
+  stage = "セッション作成"
+  access_jwt = nil
   begin
+    uri = URI.parse("#{bs_pds_url}/xrpc/com.atproto.server.createSession")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json')
+    request.body = { identifier: bs_username, password: bs_password }.to_json
+    session_response = http.request(request)
+
+    unless session_response.is_a?(Net::HTTPSuccess)
+      secrets = [bs_username, bs_password]
+      response_body = redact_for_log(session_response.body, secrets)
+      puts "Bluesky HTTPエラー: 処理段階=#{stage}, 応答コード=#{session_response.code}, 応答本文=#{response_body}"
+      return false
+    end
+
+    stage = "セッション応答解析"
+    session = JSON.parse(session_response.body)
+    access_jwt = session['accessJwt']
+    did = session['did']
+    unless access_jwt.is_a?(String) && !access_jwt.strip.empty?
+      raise "Blueskyセッション応答にaccessJwtがありません"
+    end
+    unless did.is_a?(String) && !did.strip.empty?
+      raise "Blueskyセッション応答にdidがありません"
+    end
+
+    stage = "投稿"
+    uri = URI.parse("#{bs_pds_url}/xrpc/com.atproto.repo.createRecord")
+    request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json', 'Authorization' => "Bearer #{access_jwt}")
+    request.body = {
+      collection: 'app.bsky.feed.post',
+      repo: did,
+      record: {
+        text: post_text,
+        createdAt: Time.now.utc.iso8601
+      }
+    }.to_json
+
     bluesky_response = http.request(request)
-    puts "blueskyに投稿しました"
-    puts bluesky_response.to_s
-    puts bluesky_response.body.to_s
+    if bluesky_response.is_a?(Net::HTTPSuccess)
+      puts "Blueskyに投稿しました"
+    else
+      secrets = [bs_username, bs_password, access_jwt]
+      response_body = redact_for_log(bluesky_response.body, secrets)
+      puts "Bluesky HTTPエラー: 処理段階=#{stage}, 応答コード=#{bluesky_response.code}, 応答本文=#{response_body}"
+      return false
+    end
   rescue => e
-    puts "bluesky投稿エラー"
-    puts bluesky_response.to_s
-    puts bluesky_response.body.to_s
-    puts e.class
-    puts e.message
-    puts e.backtrace
+    secrets = [bs_username, bs_password, access_jwt]
+    error_message = redact_for_log(e.message, secrets)
+    puts "Bluesky投稿エラー: 処理段階=#{stage}, 例外=#{e.class}, メッセージ=#{error_message}"
     return false
   end
   
 end
-
