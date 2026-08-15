@@ -5,6 +5,7 @@ require 'base64'
 require 'openssl'
 require 'yaml'
 require 'time'
+require 'securerandom'
 require 'aws-sdk-s3'
 
 # 31bot script ver 1.5
