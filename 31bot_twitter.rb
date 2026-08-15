@@ -18,6 +18,15 @@ require 'aws-sdk-s3'
 # 1.01
 # twittrでは140文字以内、bskyではそれ以上の文字数が可能に設定
 
+def redact_for_log(value, secrets)
+  redacted = value.to_s.dup.force_encoding("UTF-8")
+  secrets.compact.reject { |secret| secret.to_s.empty? }.each do |secret|
+    redacted.gsub!(secret.to_s, "[REDACTED]")
+  end
+  redacted.gsub!(/("(?:accessJwt|refreshJwt|access_token|token|password|authorization)"\s*:\s*")[^"]*(")/i, '\1[REDACTED]\2')
+  redacted.gsub!(/Bearer\s+[^\s",}]+/i, "Bearer [REDACTED]")
+  redacted
+end
 
 def lambda_handler(event:, context:)
   
@@ -37,27 +46,47 @@ def lambda_handler(event:, context:)
   puts "バケットの中身を取り出します"
   # 配列にS3 バケットの中身(ファイルのリスト)を格納
   s3_client.list_objects(:bucket => bucket_name).contents.each do |object|
-    file_list << object.key
+    file_list << object.key if object.key.match?(/\.ya?ml\z/i)
   end
   
   puts file_list.to_s
   
+  if file_list.empty?
+    puts "投稿候補がありません: S3オブジェクト=(なし), 理由=.ymlまたは.yamlのオブジェクトがありません"
+    return false
+  end
+
   # バケットの中身(ファイルのリスト)からランダムにファイルを指定、中身を取り出す
-  file_body = s3_client.get_object(:bucket => bucket_name, :key => file_list[rand(1..file_list.size)-1]).body
+  selected_key = file_list.sample
+  file_body = s3_client.get_object(:bucket => bucket_name, :key => selected_key).body
   
   puts file_body
   
   ### 投稿文生成
   # バケットの中身がYAMLファイルなので、Rubyのオブジェクトに変換する
-  yamlbody = YAML.load(file_body)
-  
-  # バケットの中身は、和歌のデータの配列なので、ランダムに指定し取り出す
-  waka = yamlbody[rand(yamlbody.size)]
-  
-  puts waka
-  
-  # 取り出した和歌のデータから投稿するテキストを生成する。最後に140文字以内にカットしている
-  post_text = "#{waka["source"]}#{waka["number"]}\n#{waka["詞書(現代訳)"]}\n#{waka["歌"].delete(" ")}\n#{waka["author"]}"
+  begin
+    yamlbody = YAML.load(file_body)
+  rescue Psych::SyntaxError => e
+    puts "YAML構文エラー: S3オブジェクト=#{selected_key}, エラー=#{e.message}"
+    return false
+  end
+
+  required_fields = ["source", "number", "詞書(現代訳)", "歌", "author"]
+  candidates = (yamlbody.is_a?(Array) ? yamlbody : []).each_with_object([]) do |record, matches|
+    next unless record.is_a?(Hash)
+    next unless required_fields.all? { |field| !record[field].nil? && !record[field].to_s.strip.empty? }
+
+    text = "#{record["source"]}#{record["number"]}\n#{record["詞書(現代訳)"]}\n#{record["歌"].to_s.delete(" ")}\n#{record["author"]}"
+    text = text.gsub(/〈[^〉]*〉/, "")
+    matches << text if text.length <= 140
+  end
+
+  if candidates.empty?
+    puts "投稿候補がありません: S3オブジェクト=#{selected_key}, 理由=必須項目の欠落またはTwitter完成本文が140文字超過"
+    return false
+  end
+
+  post_text = candidates.sample
 
 # AWS S3を使わずにプログラムが動くか確認するためのダミー投稿文生成
 #  t_time = Time.now.to_s
@@ -97,29 +126,31 @@ def lambda_handler(event:, context:)
     'Authorization' => "OAuth oauth_consumer_key=\"#{tw_consumer_key}\", oauth_nonce=\"#{nonce}\", oauth_signature=\"#{URI.encode_www_form_component(signature)}\", oauth_signature_method=\"HMAC-SHA1\", oauth_timestamp=\"#{timestamp}\", oauth_token=\"#{tw_access_token}\", oauth_version=\"1.0\"",
   'Content-Type' => 'application/json'
   }
-  body = {text: post_text.gsub(/〈[^〉]*〉/, "").slice(0, 140)}.to_json
+  body = {text: post_text}.to_json
 
   uri = URI.parse(tw_create_tweet_url)
   http = Net::HTTP.new(uri.host, uri.port)
   http.use_ssl = true
   request = Net::HTTP::Post.new(uri.request_uri, headers)
   request.body = body
-  puts "request.body: #{request.body}"
-  
+
+  stage = "投稿"
   begin
     twitter_response = http.request(request)
-    puts "twitterに投稿しました"
-    puts twitter_response.to_s
-    puts twitter_response.body.force_encoding("UTF-8")
-    # 投稿終わり
-    puts "投稿スクリプト終わり。Well done!"
+    if twitter_response.is_a?(Net::HTTPSuccess)
+      puts "Twitterに投稿しました"
+      # 投稿終わり
+      puts "投稿スクリプト終わり。Well done!"
+    else
+      secrets = [tw_consumer_key, tw_consumer_secret, tw_access_token, tw_access_token_secret]
+      response_body = redact_for_log(twitter_response.body, secrets)
+      puts "Twitter HTTPエラー: 処理段階=#{stage}, 応答コード=#{twitter_response.code}, 応答本文=#{response_body}"
+      return false
+    end
   rescue => e
-    puts "twitter投稿エラー"
-    puts twitter_response.to_s
-    puts twitter_response.body.force_encoding("UTF-8")
-    puts e.class
-    puts e.message
-    puts e.backtrace
+    secrets = [tw_consumer_key, tw_consumer_secret, tw_access_token, tw_access_token_secret]
+    error_message = redact_for_log(e.message, secrets)
+    puts "Twitter投稿エラー: 処理段階=#{stage}, 例外=#{e.class}, メッセージ=#{error_message}"
+    return false
   end
 end
-
