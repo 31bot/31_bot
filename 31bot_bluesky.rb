@@ -52,7 +52,7 @@ def lambda_handler(event:, context:)
   yamlbody = YAML.load(file_body)
   
   # バケットの中身は、和歌のデータの配列なので、ランダムに指定し取り出す
-  waka = yamlbody[rand(yamlbody.size - 1)]
+  waka = yamlbody[rand(yamlbody.size)]  
   
   puts waka
   
